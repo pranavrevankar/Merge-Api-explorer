@@ -317,11 +317,22 @@ def fetch_endpoint_data(endpoint: str, access_token: str, api_key: str, method: 
             if data:
                 # Remove empty values
                 data = {k: v for k, v in data.items() if v is not None and v != ""}
+                # Remove fields that are empty lists
+                data = {k: v for k, v in data.items() if not (isinstance(v, list) and len(v) == 0)}
                 # For tickets endpoint, wrap the data in a model object
                 if "tickets" in endpoint:
+                    # Ensure 'collections' and other array fields are always lists
+                    array_fields = [
+                        "collections", "assignees", "tags"
+                    ]
+                    for field in array_fields:
+                        if field in data and not isinstance(data[field], list):
+                            data[field] = [data[field]]
                     formatted_data = {"model": data}
                 else:
                     formatted_data = data
+            # Debug print
+            st.write("Outgoing POST payload:", formatted_data)
             
             response = requests.post(url, headers=headers, json=formatted_data)
         
@@ -351,6 +362,27 @@ def display_endpoint_data(endpoint: str, access_token: str, api_key: str, method
             # Display count
             st.metric("Total Records", len(data["results"]))
 
+            # Add a graph for the Ticketing page (tickets endpoint)
+            if endpoint == "/tickets":
+                # Try to find a date field
+                date_field = None
+                for possible_field in ["created_at", "created", "createdAt", "createdat"]:
+                    if possible_field in df.columns:
+                        date_field = possible_field
+                        break
+                if date_field:
+                    st.subheader("Tickets Over Time")
+                    # Convert to datetime
+                    df[date_field] = pd.to_datetime(df[date_field], errors='coerce')
+                    # Drop rows with NaT
+                    df = df.dropna(subset=[date_field])
+                    # Group by date (day)
+                    df["date_only"] = df[date_field].dt.date
+                    tickets_by_date = df.groupby("date_only").size().reset_index(name="count")
+                    st.line_chart(data=tickets_by_date.set_index("date_only"))
+                else:
+                    st.info("No date field found to plot the graph.")
+
 def get_post_form(endpoint_name: str, endpoint_info: Dict) -> Dict:
     """Generate a form for POST request data."""
     if "post_fields" not in endpoint_info:
@@ -379,7 +411,8 @@ def get_post_form(endpoint_name: str, endpoint_info: Dict) -> Dict:
                 field.replace("_", " ").title(),
                 help="Enter UUIDs or values separated by commas"
             )
-            form_data[field] = [x.strip() for x in input_text.split(",")] if input_text else []
+            # Split, strip, and filter out empty strings
+            form_data[field] = [x.strip() for x in input_text.split(",") if x.strip()] if input_text else []
         elif "UUID" in field_type:
             form_data[field] = st.text_input(
                 field.replace("_", " ").title(),
