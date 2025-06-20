@@ -475,6 +475,7 @@ def display_api_documentation(endpoint_name: str):
 
 def main():
     st.title("Merge API Explorer")
+    st.markdown('Note: This is not an official API explorer from [Merge.dev](https://merge.dev)')
     
     # Initialize session state for authentication
     if 'authenticated' not in st.session_state:
@@ -482,9 +483,10 @@ def main():
     
     # Sidebar for category selection - simplified design
     st.sidebar.header("API Categories")
+    # Only show 'Ticketing' in the sidebar
     selected_category = st.sidebar.selectbox(
         "Select Category",
-        list(API_CATEGORIES.keys())
+        ["Ticketing"]
     )
     
     # Main content area
